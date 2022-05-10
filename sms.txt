@@ -1,0 +1,67 @@
+ public function sendSms($contact, $message)
+ {
+     $smsData = DB::table('sms')->first();
+        if ($smsData != null) {
+            if ($smsData->smsVendor == 'SparrowSMS' || $smsData->smsVendor == 'MavorionSMS') {
+                $url = $smsData->smsURL;
+                $sender = $smsData->smsSender;
+                $smsToken = $smsData->smsToken;
+                // Using Curl
+                $args = http_build_query(array(
+                    'token' => $smsToken,
+                    'from' => $sender,
+                    'to' => $contact,
+                    // 'dry_run'=>1,
+                    'text' => $message,
+                ));
+
+                # Make the call using API.
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $url);
+                curl_setopt($ch, CURLOPT_POST, 1);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $args);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+
+                // Response
+                $data = [
+                    "response" => curl_exec($ch),
+                    "status_code" => curl_getinfo($ch, CURLINFO_HTTP_CODE),
+                ];
+                curl_close($ch);
+
+                // //Using Guzzle
+                // $args = [
+                //     'token' => $smsToken,
+                //     'from' => $sender,
+                //     'to' => $contact,
+                //     // 'dry_run'=>1,
+                //     'text' => $message,
+                // ];
+                
+                // $client = new Client();
+                // $response = $client->post($url, ['form_params' => $args]);
+                // $message = json_decode($response->getBody()->getContents());
+                //  // Response
+                // $data = [
+                //     "response" => $message,
+                //     "status_code" =>$response->getStatusCode(),
+                // ];
+                return $data;
+            } else if ($smsData->smsVendor == 'WebSoft') {
+                $content = [
+                    'token' => $smsData->smsToken,
+                    'to' => $contact,
+                    'sender' => $smsData->smsSender,
+                    'message' => $message,
+                ];
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $smsData->smsURL);
+                curl_setopt($ch, CURLOPT_POST, 1);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $content);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                $server_output = curl_exec($ch);
+                curl_close($ch);
+                return $server_output;
+            }
+        }
+ }

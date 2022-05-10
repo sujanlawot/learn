@@ -1,0 +1,5 @@
+1.dbeaver Assign variable
+    set @dayDate :='day';
+    set @day_ :='mon';
+    set @consultant_id :=2;
+

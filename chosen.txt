@@ -1,0 +1,53 @@
+1. for loop choosenbanks
+
+   chosen.change(
+                    function() {
+                        let index = self.el.attributes.index.value;
+                        let value = self.el.value;
+                        self.vm.teamItemDetail.team_item[index].consultant_id = value;
+                    }
+                );
+
+2. 
+<select
+class="form-control col-md-7 input-sm"
+data-placeholder="Consultant"
+v-choosendoctors                  
+style="width: 100%"
+:index="key"
+>
+<option  disabled>Select Consultant</option>
+<option
+v-for="consultant in doctors"
+v-bind:value="consultant.id"
+:key="consultant.id"
+class="form-control"
+>
+{{consultant.doctor_title}} {{ consultant.doctor_name | stringDisplay 10}} [{{consultant.code}}]
+</option>
+</select>
+
+choosendoctors: {
+            twoWay: true,
+            bind: function() {
+                let self = this;
+                var vm = this.vm;
+                var chosen = $(self.el).chosen({
+                    disable_search_threshold: 0,
+                    no_results_text: "Oops, nothing found!",
+                    search_contains: true,
+                    width: "100%",
+                });
+
+                chosen.change(
+                    function() {
+                        let index = self.el.attributes.index.value;
+                        let value = self.el.value;
+                        self.vm.teamItemDetail.team_item[index].consultant_id = value;
+                    }
+                );
+                chosen
+                    .data("chosen")
+                    .container.bind("keyup", function(event) {}.bind(self));
+            },
+        },

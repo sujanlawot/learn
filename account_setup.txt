@@ -1,0 +1,14 @@
+Dependency
+1. php -v 7.1.33
+2. node 8.10.0
+
+
+1. git clone https://gitlab.com/ShiwangiShrestha/dolphin-account.git -b develop_sso
+2. npm install
+3. composer install
+4. .env file
+5. client.php
+6. configure .env file
+    APP_URL=http://10.2.3.140:9000/
+7. npm run watch
+8. php artisan serve --port=9000 --host=10.2.3.140

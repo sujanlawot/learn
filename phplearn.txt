@@ -1,0 +1,53 @@
+1. Validation for client file 
+    isset(trans('client')['enable_doctor_leave_sms']
+    !empty( trans('client.doctor_leave_sms'))
+2. Validation for status in table pivot_patient_sms exits or not 
+    $count =  count(DB::select("SHOW COLUMNS FROM `pivot_patient_sms` LIKE 'status'"));
+    if($count==0)
+    {
+        return;
+    }
+
+3. for loop in php 
+    foreach($pivot_sms as $key=>$data)
+4. Validating Number
+    is_numeric($data->mobileNo)
+
+5. Carbon
+    <!-- Convert date into Carbon -->
+    $leave_from=Carbon::parse($leave_date);
+    $leave_to=Carbon::parse($request->date_to);
+    <!-- Condition that check one greater than another -->
+    if($leave_from->greaterThan($leave_to))
+    {
+        $response=[
+            'status'=>201,
+            'message'=>'Date from is greater than Date To'
+        ];
+        return $response;
+    }
+
+    <!-- Add one day -->
+    $leave_from=Carbon::parse($leave_date)->addDay();
+    <!-- Get in Respective format from Carbon -->
+    $leave_date=$leave_from->format('Y-m-d');
+    
+5. Array splice
+    Remove from array   : array_splice($this->holidayByDate,$index,1);
+    Add to Array        : array_splice($this->holidayByDate,count($this->holidayByDate),0,array($item));
+
+6.
+
+$key =  array_search($item->id, array_column($this->departments, 'id'));
+                    if ($key !== false) {
+                        if ($item->in_pat_id > 1 && $item->is_emergency == 0) {
+                            $this->departments[$key]->ipd = $item;
+                        }
+                        if ($item->in_pat_id == 0 && $item->is_emergency == 0) {
+                            $this->departments[$key]->opd = $item;
+                        }
+                        if ($item->in_pat_id == 0 && $item->is_emergency > 0) {
+                            $this->departments[$key]->er = $item;
+                        }
+                    }
+120115132

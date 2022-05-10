@@ -1,0 +1,60 @@
+1.
+Listeners/LogEventSubscriber.php
+ public function subscribe($events)
+    {
+        $events->listen('log', 'App\Listeners\LogEventSubscriber@saveLog');
+        $events->listen('patient-activity','App\Listeners\LogEventSubscriber@savePatientActivity');
+    }
+
+    2.
+    public function savePatientActivity(
+        $patient_id,
+        $in_pat_id = 0,
+        $er_id=0,
+        $dialysis_pat_id=0,
+        $description = null,
+        $name = null,
+        $rate_type=null,
+        $created_by = null,
+        $consultant = null,
+        $add_consultant = null,
+        $rate = null,
+        $amount = null,
+        $qty = null   
+    ){
+        $data =[
+            'date'=>Carbon::now(),
+            'patient_id'=>$patient_id,
+            'in_pat_id'=>$in_pat_id,
+            'er_id'=>$er_id,
+            'dialysis_pat_id'=>$dialysis_pat_id,
+            'name'=>$name,
+            'rate_type'=>$rate_type,
+            'created_by'=>$created_by,
+            'consultant'=>$consultant,
+            'add_consultant'=>$add_consultant,
+            'rate'=>$rate,
+            'qty'=>$qty,
+            'amount'=>$amount,
+            'description'=>$description,
+
+        ];
+        $this->patient_activity->saveActivity($data);
+
+    }
+
+    3.
+    \Event::fire('patient-activity', [$patientID,0, $emergency_registrations,0,$description_triage,$full_name,$rate_type_name,Auth::user()->name,null,null,0,0,0]);
+
+    4.Providers/EventServiceProvider
+
+     protected $listen = [
+        'App\Events\SomeEvent' => [
+            'App\Listeners\EventListener',
+        ],
+    ];
+
+
+    protected $subscribe = [
+        'App\Listeners\LogEventSubscriber',
+    ];

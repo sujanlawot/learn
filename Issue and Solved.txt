@@ -1,0 +1,28 @@
+1. #message: "count(): Parameter must be an array or an object that implements Countable"
+    SOLVED : php version issue change to php7.1.33
+2. "Cache store [] is not defined."  During Logout
+    Solved: Add cache.php in config folder
+3. MethodNotAllowedHttpException {#2189
+  -statusCode: 405
+  -headers: array:1 [
+    "Allow" => "GET, HEAD"
+  ]
+  #message: ""
+  #code: 0
+  #file: "C:\Users\Mavorion Dev01\Desktop\mavorion\mis\vendor\laravel\framework\src\Illuminate\Routing\RouteCollection.php"
+
+    
+    Solved by / infront of api axios.post('/api/deleteBatchListPatient',
+
+4. Issue
+    Uncaught TypeError: Cannot read property 'mData' of undefined
+    at HTMLTableCellElement.<anonymous> (jquery.dataTables.min.js:91)
+    at Function.each (jquery-1.11.1.min.js:2)
+    at m.fn.init.each (jquery-1.11.1.min.js:2)
+    at HTMLTableElement.<anonymous> (jquery.dataTables.min.js:91)
+    at Function.each (jquery-1.11.1.min.js:2)
+    at m.fn.init.each (jquery-1.11.1.min.js:2)
+
+    Solve by adding { data: "wrb", width: "15%", name: "Ward/Room/Bed"},
+
+5. 

@@ -1,0 +1,112 @@
+1. npm install tabulator-tables --save
+2. add in app.js for css
+    import "tabulator-tables/dist/css/tabulator.min.css";
+
+3. In Vue
+import Tabulator from "tabulator-tables";
+getData() {
+      this.dataLoader = true;
+      axios
+        .get("api/fetchAllAccount")
+        .then((response) => {
+          this.accountData = response.data.data;
+          let self = this;
+          var table = new Tabulator("#opening_account_balance", {
+            height: window.innerHeight - 220,
+            layout: "fitColumns",
+            resizableColumnFit:true,
+            data: this.accountData,
+            pagination:"local",
+            paginationSize:50,
+            paginationSizeSelector:[50,100,200],
+            // persistentLayout: true,
+            // persistentSort: true,
+            // dataTree: true,
+            // dataTreeStartExpanded: false,
+            placeholder: "No record(s) found",
+            rowFormatter:function(row){
+               row.getElement().classList.add("new-tabulator-cell"); 
+            },
+          
+            columns: [
+             
+              {
+                title: "Account Type",
+                field: "account_type",
+                headerFilter:"input",
+                width:"20%",
+                headerFilterPlaceholder:" ",
+                
+              },
+              {
+                title: "Account Sub Type",
+                field: "account_sub_type",
+                width:"20%",
+                headerFilter:"input",
+                headerFilterPlaceholder:" ",
+                
+              },
+              {
+                  title:"Parent Account",
+                  width:"20%",
+                  field:"parent_name",
+                  headerFilter:"input",
+                  headerFilterPlaceholder:" ",
+              },
+               {
+                 width:"20%",
+                  title: "Account Name",
+                  field: "account_name",
+                  headerFilter:"input",
+                  headerFilterPlaceholder:" ",
+              },
+              {
+                  title:"Opening Balance",
+                  width:"10%",
+                  field:"new_opening_balance",
+                  editor:"input",
+                  align:"right",
+                  cellEdited:function(cell){
+                      let new_value=cell.getRow().getData().new_opening_balance;
+                      let old_value=cell.getRow().getData().old_opening_balance;
+                      let account_id=cell.getRow().getData().account_id;
+                      let acc_type_id=cell.getRow().getData().acc_type_id;
+                      self.addAccountId(account_id,acc_type_id,new_value,old_value);
+                  },
+                  formatter:function(cell,formatterParams)
+                  {
+                      let value = cell.getRow().getData().new_opening_balance;
+                      return value +"<span style='margin-right:20px'></span>";
+                  }
+              },
+
+              {
+                  title:"Cost Center",
+                  width:"10%",
+                  field:"is_cost_center",
+                  editor:true, 
+                  formatter:"tickCross",
+                  align:"center",
+                  cellEdited:function(cell){
+                        let account_id=cell.getRow().getData().account_id;
+                        let is_cost_center=cell.getRow().getData().is_cost_center;
+                        self.changeCostCenter(account_id,is_cost_center);
+                    },
+                  // formatter:function(cell,formatterParams)
+                  // {
+                  //     let value = cell.getRow().getData().new_opening_balance;
+                  //     return value +"<span style='margin-right:20px'></span>";
+                  // }
+              },
+
+            ],
+          });
+          this.dataLoader = false;
+        })
+        .catch((error) => {
+          this.dataLoader = false;
+        });
+    },
+
+
+    <div id="opening_account_balance"></div>

@@ -1,0 +1,7 @@
+Setup Inventory Project
+ rm -r .\node_modules\
+tar -xf .\node_modules.zip
+delete package.lock.json
+npm run watch
+.env APP_URL=http://10.2.3.140:9000 in env file
+php artisan config:cache

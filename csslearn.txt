@@ -1,0 +1,14 @@
+1. Table Scroll and header to fixed
+    .department_table
+    {
+    max-height: 400px;
+    overflow: scroll;
+    }
+    .department_table table thead
+    {
+        position: sticky;
+        top:-1px;
+    }
+
+
+

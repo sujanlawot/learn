@@ -1,0 +1,14 @@
+1.How can I make Git "forget" about a file that was tracked, but is now in .gitignore?
+    git rm -r --cached .
+    git add .
+    git commit -am "Remove ignored files"
+    and
+    git rm -r --cached . && git add . && git commit -am "Remove ignored files"
+2. git reset .
+    changes the file from stagging to changes
+3. git restore
+    remove all changes
+
+4. git stash
+    git pull origin 
+    git stash pop

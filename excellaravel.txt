@@ -1,0 +1,244 @@
+1. composer require maatwebsite/excel
+2. add in provider and alias config/app.php
+    Maatwebsite\Excel\ExcelServiceProvider::class,
+    'Excel' => Maatwebsite\Excel\Facades\Excel::class,
+3. views/excel/CashFlowReportExcel.blade.php
+   <!DOCTYPE html>
+<html>
+
+<head>
+    <title>Trial Balance Report</title>
+</head>
+
+<body>
+    <table>
+        <tbody>
+            <tr>
+                <td colspan="6" style="text-align: center; font-weight:bold;font-size:15px">
+                    {{ $excel_data['company_details']->company_name ?? '' }}
+                </td>
+            </tr>
+            <tr>
+                <td colspan="6" style="text-align: center; font-weight:bold">
+                    Trial Balance Report
+                </td>
+            </tr>
+            <tr>
+                <td colspan="6" style="text-align: center; font-weight:bold">
+                    {{ $excel_data['formatted_english_date'] ?? '' }}
+                </td>
+            </tr>
+            <tr>
+                <td colspan="6" style="text-align: center; font-weight:bold">
+                    {{ $excel_data['formatted_nepali_date'] ?? '' }}
+                </td>
+            </tr>
+            <tr>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td colspan="2" style="text-align: center; font-weight:bold">Opening Balance</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td colspan="2" style="text-align: center; font-weight:bold">Closing Balance</td>
+            </tr>
+            <tr>
+                <td style="font-weight:bold;">Particulars</td>
+                <td style="font-weight:bold;">Code</td>
+                <td style="text-align: right;font-weight:bold;">Debit (Rs.)</td>
+                <td style="text-align: right;font-weight:bold;">Credit (Rs.)</td>
+                <td style="text-align: right;font-weight:bold;">Debit (Rs.)</td>
+                <td style="text-align: right;font-weight:bold;">Credit (Rs.)</td>
+                <td style="text-align: right;font-weight:bold;">Debit (Rs.)</td>
+                <td style="text-align: right;font-weight:bold;">Credit (Rs.)</td>
+            </tr>
+
+            @foreach ($excel_data['data']->data as $data)
+                <tr>
+                    <td style="{{ $data->has_child == 1 ? 'font-weight:bold;' : '' }}">{{ $data->name ?? '' }}</td>
+                    <td style="{{ $data->has_child == 1 ? 'font-weight:bold;' : '' }}">{{ $data->code ?? '' }}</td>
+                    <td style="text-align: right;{{ $data->has_child == 1 ? 'font-weight:bold;' : '' }}">
+                        {{ $data->opening_balance_debit ?? '' }}</td>
+                    <td style="text-align: right;{{ $data->has_child == 1 ? 'font-weight:bold;' : '' }}">
+                        {{ $data->opening_balance_credit ?? '' }}</td>
+                    <td style="text-align: right;{{ $data->has_child == 1 ? 'font-weight:bold;' : '' }}">
+                        {{ $data->debit ?? '' }}</td>
+                    <td style="text-align: right;{{ $data->has_child == 1 ? 'font-weight:bold;' : '' }}">
+                        {{ $data->credit ?? '' }}</td>
+                    <td style="text-align: right;{{ $data->has_child == 1 ? 'font-weight:bold;' : '' }}">
+                        {{ $data->closing_balance_debit ?? '' }}</td>
+                    <td style="text-align: right;{{ $data->has_child == 1 ? 'font-weight:bold;' : '' }}">
+                        {{ $data->closing_balance_credit ?? '' }}</td>
+                </tr>
+                @if ($data->has_child == 1)
+                    @each('partials.trial_balance_column', $data->children,'data')
+                @endif
+            @endforeach
+            <tr>
+                <td></td>
+                <td></td>
+                <td style="font-weight: bold;">{{ $excel_data['data']->total->total_opening_debit ?? '' }}</td>
+                <td style="font-weight: bold;">{{ $excel_data['data']->total->total_opening_credit ?? '' }}</td>
+                <td style="font-weight: bold;">{{ $excel_data['data']->total->total_debit ?? '' }}</td>
+                <td style="font-weight: bold;">{{ $excel_data['data']->total->total_credit ?? '' }}</td>
+                <td style="font-weight: bold;">{{ $excel_data['data']->total->total_closing_debit ?? '' }}</td>
+                <td style="font-weight: bold;">{{ $excel_data['data']->total->total_closing_credit ?? '' }}</td>
+            </tr>
+            <tr>
+                <td colspan="6" style="text-align: left;">
+                    Generated on {{ now()->format('Y-m-d H:i:s') }} by {{ auth()->user()->name ?? '' }}
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</body>
+
+</html>
+
+
+4. app/Exports/TrialBalanceExport.php
+<?php
+
+namespace App\Exports;
+
+use Maatwebsite\Excel\Concerns\FromView;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Illuminate\Contracts\View\View;
+
+class TrialBalanceExport extends \PhpOffice\PhpSpreadsheet\Cell\StringValueBinder implements FromView, ShouldAutoSize
+{
+    public $excel_data;
+
+    public function __construct($excel_data)
+    {
+        $this->excel_data = $excel_data;
+    }
+
+    public function view(): View
+    {
+        return view('excel.TrialBalanceReportExcel', ['excel_data' => $this->excel_data]);
+    }
+}
+
+
+
+5.ExcelExportController.php
+use App\Http\Controllers\Api\ReportController as ApiReportController;
+public function exportTrialBalance($start, $end)
+    {
+        try {
+            $trial_balance_json = (new ApiReportController)->getReport_test(new Request(), 'tb', $start, $end, 0);
+            $trial_balance_data = $trial_balance_json->getData();
+            $company_details = (new AccountController())->getSelectedCompany();
+            $formatted_dates = Helper::getFormattedDatePeriod($start, $end);
+            $excel_data['data'] = $trial_balance_data;
+            $excel_data['company_details'] = $company_details;
+            $excel_data['formatted_nepali_date'] = $formatted_dates['formatted_nepali_date'];
+            $excel_data['formatted_english_date'] = $formatted_dates['formatted_english_date'];
+            return Excel::download(new TrialBalanceExport($excel_data), $company_details->company_name . '-TrialBalanceReport' . '-' . now()->format('Y-m-d') . '.xlsx');
+        } catch (\Throwable $th) {
+            return response()->json([
+                'message' => 'Failed to generate report',
+                'error' => $th->getTrace(),
+            ], 400);
+        }
+    }
+
+
+    6.ReportController
+    public function getReport_test(Request $request, $type, $from, $to, $reportType)
+    {
+
+        // $this->accountType();
+        $this->company_id = $this->getPrimaryCompanyInfo(Auth::user()->id, false);
+        $this->period_id = $this->getCurrentFiscalYear($this->company_id);
+        $date_selected_book = DB::table('acc_period as ap')->select('date_fr', 'date_to')->join('acc_fiscal_year as afy', 'afy.id', 'ap.fiscal_year_id')->where('ap.id', $this->getCurrentFiscalYear())->first();
+        $date_from = $date_selected_book->date_fr;
+        $fromC  = new Carbon($from);
+        $endC = new Carbon($to);
+        $this->getMonthListFromDateG = $this->getMonthListFromDate($fromC, $endC);
+        $this->from = $from;
+        $this->to = $to;
+        $this->reportType = $reportType;
+        $this->getAllAccountOPBalanceTrait = $this->getAllAccountOPBalance($date_from, $this->from, $this->period_id, $this->openingBalanceId);
+        $this->getAllAccountClosBalanceTrait = $this->getAllAccountClosBalance($date_from, $this->to, $this->period_id, $this->openingBalanceId);
+
+        // dd($this->getAllAccountClosBalanceTrait);
+        $data = DB::table('acc_accounts as aa')
+            ->select('aadt.account_type_id', 'aa.account_detail_type_id', 'aa.parent_id as account_parent_id', 'aadt.name as aadt_name', 'aa.id as account_id', 'aa.name as account_name', 'aa.parent_id  as account_parent_id', 'aa.code as code')
+            ->selectRaw('date(avd.date_posted) as date_posted, case when av.is_opening_balance_voucher =0 then sum(avd.debit) else 0 end as debit,case when av.is_opening_balance_voucher =0 then sum(avd.credit) else 0 end as credit, 0 as opening_balance,0 as closing_balance')
+            ->join('acc_account_detail_types as aadt', 'aadt.id', 'aa.account_detail_type_id')
+            ->join('acc_voucher_details as avd', 'avd.account_id', 'aa.id')
+            ->join('acc_vouchers as av', 'av.id', 'avd.move_id')
+            ->whereRaw("date(avd.date_posted) between '" . $from . "' and '" . $to . "'")
+            ->where('aa.id', '<>', $this->openingBalanceId)
+            ->where('avd.period_id', $this->period_id)
+            ->where('avd.status', '1')
+            ->orderby('aa.order', 'ASC')
+            ->orderby('aa.order', 'ASC');
+
+        $data = $data->groupBy('aa.id')->chunk(1000, function ($items) {
+            foreach ($items as $key => $item) {
+
+                $this->totalDebit =  $item->debit + $this->totalDebit;
+                $this->totalCredit =  $item->credit + $this->totalCredit;
+                $children = [];
+                $item->opening_balance_debit = 0;
+                $item->opening_balance_credit = 0;
+                $item->closing_balance_debit = 0;
+                $item->closing_balance_credit = 0;
+
+                $indexOfAccountDetailType = array_search($item->account_detail_type_id, array_column($this->newData, 'id'));
+                if (count($this->getAllAccountOPBalanceTrait) > 0) {
+
+                    $bfIndex = array_search($item->account_id, array_column($this->getAllAccountOPBalanceTrait, 'account_id'));
+                    if ($bfIndex !== false) {
+                        $item->opening_balance_debit = $this->getAllAccountOPBalanceTrait[$bfIndex]->debit;
+                        $item->opening_balance_credit = $this->getAllAccountOPBalanceTrait[$bfIndex]->credit;
+                    }
+                }
+                if (count($this->getAllAccountClosBalanceTrait) > 0) {
+                    $cIndex = array_search($item->account_id, array_column($this->getAllAccountClosBalanceTrait, 'account_id'));
+                    if ($cIndex !== false) {
+                        $item->closing_balance_debit = $this->getAllAccountClosBalanceTrait[$cIndex]->debit;
+                        $item->closing_balance_credit = $this->getAllAccountClosBalanceTrait[$cIndex]->credit;
+                    }
+                }
+
+                $this->total_opening_debit += $item->opening_balance_debit;
+                $this->total_opening_credit += $item->opening_balance_credit;
+
+                $this->total_closing_debit += $item->closing_balance_debit;
+                $this->total_closing_credit += $item->closing_balance_credit;
+                if ($indexOfAccountDetailType === false) {
+                    $children[] = $this->arrayFormatForAccount($item, [], 'account');
+                    $item =  $this->arrayFormatForAccount($item, $children, 'detail');
+                    array_push($this->newData, $item);
+                } else {
+
+                    $this->newData[$indexOfAccountDetailType]['debit'] += $item->debit;
+                    $this->newData[$indexOfAccountDetailType]['credit'] += $item->credit;
+                    $this->newData[$indexOfAccountDetailType]['opening_balance_debit'] += $item->opening_balance_debit;
+                    $this->newData[$indexOfAccountDetailType]['opening_balance_credit'] += $item->opening_balance_credit;
+                    $this->newData[$indexOfAccountDetailType]['closing_balance_debit'] += $item->closing_balance_debit;
+                    $this->newData[$indexOfAccountDetailType]['closing_balance_credit'] += $item->closing_balance_credit;
+                    array_push($this->newData[$indexOfAccountDetailType]['children'],  $this->arrayFormatForAccount($item, [], 'account'));
+                }
+            }
+        });
+
+        $data = $this->accountTypeArray($this->newData);
+        return response()->json([
+            'data' => $data,
+            'total' => array(
+                'total_debit' => number_format($this->totalDebit, 2),
+                'total_credit' => number_format($this->totalCredit, 2),
+                'total_opening_debit' => number_format($this->total_opening_debit, 2),
+                'total_opening_credit' => number_format($this->total_opening_credit, 2),
+                'total_closing_debit' => number_format($this->total_closing_debit, 2),
+                'total_closing_credit' => number_format($this->total_closing_credit, 2)
+            ), 'status' => 'success', 'message' => 'Successfully fetched'
+        ], 200);
+    }
+
+6. web.php
+Route::get('excel/trial-balance/{start}/{end}', 'ExcelExportsController@exportTrialBalance');

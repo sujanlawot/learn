@@ -1,0 +1,103 @@
+1. app/Traits/CompanyInfo
+<?php
+namespace App\Traits;
+use DB;
+use Illuminate\Support\Facades\Session;
+use Auth;
+/**
+ * information of users company
+ * ex. selected company while login, primary company
+ */
+trait CompanyInfo
+{
+
+    /**
+     * @return Object   {
+     *                   "user_id": 1
+     *                   "company_id": 1
+     *                   "company_name": "Example company"
+     *                   "address": "Example, Example"
+     *                   "website": "example@example.com"
+     *                   "contact": "000000000"
+     *                   "pan_no": "000000000"
+     *                   "vat_no": "000000000"
+     *                   "short_name": "SHN"
+     *                  }
+     */ 
+    public function getSelectedCompany($full_info = true){
+        $selected_company = Session::get('current_company');
+        $user = Auth::user();
+        
+        /*$query = "
+            SELECT 
+                pub.user_id,
+                pub.company_id,
+                b.company company_name,
+                b.address,
+                b.website,
+                b.contact,
+                b.pan_no,
+                b.vat_no,
+                b.short_name
+            FROM
+                pivot_user_company pub
+                    JOIN
+                company b ON b.id = pub.company_id AND pub.user_id = $user->id AND pub.company_id = $selected_company
+                    AND b.is_active = 1
+        ";*/
+        $query = "
+        SELECT ppu.user_id,
+                ap.company_id,
+                c.company company_name,
+                c.address,
+                c.website,
+                c.contact,
+                c.pan_no,
+                c.vat_no,
+                c.short_name from pivot_period_user ppu 
+        left join users u on u.id=ppu.user_id
+        left join acc_period ap on ap.id=ppu.period_id 
+        left join acc_fiscal_year afy on afy.id=ap.fiscal_year_id 
+        left join company c on c.id=ap.company_id 
+        where u.id=$user->id AND ap.company_id = $selected_company AND c.is_active = 1;
+        ";
+
+        $companyInfo = DB::select($query);
+
+        if (count($companyInfo) == 0 ) {
+            throw new \Exception("Company assigned to you has been deactivated recently.");
+        }
+
+        $companyInfo = current($companyInfo);
+        
+        return $full_info ? $companyInfo : $companyInfo->company_id;
+    }
+}
+2. AccountController
+use App\Traits\CompanyInfo;
+class AccountController extends Controller
+{
+	use CompanyInfo;
+    	public function __construct()
+	{
+		$this->middleware(function ($request, $next) {
+
+			$this->user_info = Auth::user();
+			$this->openingBalanceId = trans('client')['opening_balance_acc_id'];
+			$this->company_id = $this->getPrimaryCompanyInfo(Auth::user()->id, false);
+			$this->period_id = $this->getCurrentFiscalYear($this->company_id);
+			try {
+				$this->primaryCompany = $this->getPrimaryCompanyInfo($this->user_info->id, false);
+				$this->selectedCompany = $this->getSelectedCompany(false);
+				$this->selectedAccountBook = $this->getCurrentFiscalYear();
+			} catch (\Exception $e) {
+				$response = [
+					'message' => "Something went wrong while getting primary company.",
+					'error' => $e->getMessage(),
+					'error_info' => $e->getTrace(),
+				];
+				return response()->json($response, 500);
+			}
+			return $next($request);
+		});
+	}

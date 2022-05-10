@@ -1,0 +1,28 @@
+1. Migration Status
+    php artisan migrate:status --path=database/migrations/ScheduleList
+2. Schedule
+    php artisan list
+    php artisan schedule:run
+     $schedule->call(function () {
+        $this->sendDynamicSms();
+    })->everyMinute()->name('Send-Dynamic-Sms')->withoutOverlapping();
+3. env url force to set 
+RouteServiceProvider
+ public function boot()
+    {
+        //
+	parent::boot();
+         $strBaseURL = $this->app['url'];
+        $strBaseURL->forceRootUrl(config('app.url'));
+	
+    }
+$strBaseURL->forceRootUrl(config('app.url'));
+
+4. laravel-debugbar
+    composer require barryvdh/laravel-debugbar --dev
+    php artisan config:cache
+    php artisan cache:clear
+    php artisan route:clear
+    php artisan debugbar:clear
+    php artisan vendor:publish
+    composer update

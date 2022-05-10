@@ -1,0 +1,54 @@
+ 1. Delete 
+    DB::table('schedule_lists')->where('schedule_id',$schedule_id)->where('pat_id',$patient_id)->delete();
+2. Date condition
+    $date=Carbon::parse($date)->format('Y-m-d');
+    $patient_to_send_sms =   DB::table('schedule_lists as sl')
+                    ->select('s.id as scheduleId','sl.pat_id','s.doc_name','s.date','p.fname','p.mobileNo','p.id as patientID')
+                    ->leftJoin('schedules as s','s.id','=','sl.schedule_id')
+                    ->leftJoin('patients as p','p.id','=','sl.pat_id')
+                    ->where('sl.schedule_id',$schedule_id)
+                    ->where('p.id','>',0)
+                    ->where('s.date',$date)
+                    ->get();
+
+3. Update
+    DB::table('schedule_lists')
+    ->where('schedule_id',$schedule_id)
+    ->update(['cancel_status'=>0]);
+
+4. Inside Where function
+    DB::table("doctors as d")
+    ->select('d.id','d.doctor_title','d.doctor_name','code','specialization','speciality_id','enable_sharing')
+    ->where('d.branch',Helper::getPrimaryBranch())
+    ->where('d.status',1)
+    ->where(function ($q) use ($search){
+        if($search != '') {
+            $q->where('d.doctor_name','like','%' . $search. '%')->orWhere('d.code','like','%' . $search. '%');
+        }
+    })
+    ->get();
+
+5. Create
+    self::create($data);
+
+6. Database Transactions
+    DB::beginTransaction();
+    try
+    {
+
+        DB::commit();
+        $response=[
+                'status'=>200,
+                'message'=>'Successfully Stored',
+            ];
+    }
+    catch(Exception $e)
+    {
+        DB::rollBack();
+        $response=[
+				'status'=>400,
+				'message'=>'Error While Storing Opening Balance',
+				'error'=>$e->getMessage()
+			];
+    }
+    return response()->json($response);

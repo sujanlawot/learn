@@ -1,0 +1,12 @@
+1. Refresh the page
+location.reload();
+2. array
+    (that.schedule_date).splice((that.schedule_date.length), 0, $(this).data('date'));
+3. findIndex
+let filteredAccountIndex=this.changedAccountOpeningBalance.findIndex(account=>account.acc_id==accountId);
+ if(filteredAccountIndex!=-1)
+4.Remove From Array
+this.changedAccountOpeningBalance.splice(filteredAccountIndex,1);//  
+
+5. Replace from arra
+this.changedAccountOpeningBalance.splice(filteredAccountIndex,1,{'acc_id':accountId,'opening_balance_amount':parseInt(newOpeningBalance),'acc_type_id':accountTypeId});

@@ -1,0 +1,279 @@
+1. Controller
+public function index(Request $request)
+  {
+
+    $fromdate = Carbon::parse($request['from'])->format('Y-m-d');
+    $todate = Carbon::parse($request['to'])->addDay()->format(('Y-m-d'));
+    $patient_like = $request['patient_like'];
+
+    DB::statement(DB::raw('set @rownum=0'));
+    if ($request['patient_like'] != '') {
+
+
+      if (is_numeric($patient_like)) {
+
+        $medical_registration = DB::select("SELECT mr.*,p.fname,p.lname,CONCAT (p.fname,' ',p.lname) AS fullname ,@rownum := @rownum + 1 AS 'index' from medical_registration mr join patients as p on
+        p.id = mr.patient_id where p.id LIKE '%$patient_like%' or mr.passport_number LIKE '%$patient_like%'  order by mr.created_at asc");
+      } else {
+
+        $medical_registration = DB::select("SELECT mr.*,p.fname,p.lname,CONCAT (p.fname,' ',p.lname) AS fullname ,@rownum := @rownum + 1 AS 'index' from medical_registration mr join patients as p on
+        p.id = mr.patient_id where p.fname LIKE '$patient_like%' order by mr.created_at asc");
+      }
+    } else {
+
+      $medical_registration = DB::select("SELECT mr.*,p.fname,p.lname,CONCAT (p.fname,' ',p.lname) AS fullname ,@rownum := @rownum + 1 AS 'index' from medical_registration mr join patients as p on
+        p.id = mr.patient_id where date(mr.created_at) between '$fromdate' and '$todate' order by mr.created_at asc");
+    }
+
+
+    $medical_registration = collect($medical_registration);
+    
+     
+    return Datatables::of($medical_registration)
+      ->removeColumn('id')
+      ->addColumn('status', function ($med) {
+        
+        $user_access= DB::select('select count(p.name) as user_check from permission_role pr
+      inner join role_user ru on ru.role_id =pr.role_id 
+      inner join permissions p on p.id=pr.permission_id 
+      where p.name = "medical-registration-user-verify-access" and ru.user_id ='.Auth::user()->id);
+      
+
+        if($user_access[0]->user_check==1){
+          $dropdown = '<select class="form-control changeStatus" id="' . $med->patient_id . '" masterbill_id="' . $med->master_bill_id . '">
+          <option value="0" ' . ($med->is_verify == 0 ? "selected" : "") . '>Not Verified</option>
+          <option value="1" ' . ($med->is_verify == 1 ? "selected" : "") . '>Verified</option>
+        </select>';
+        }
+        else{
+          $dropdown = '<button class="btn '.($med->is_verify == 0 ? "btn-info" : "btn-green").'">'.($med->is_verify == 0 ? "Not Verified" : "Verified").'</button>';
+        }
+
+        return $dropdown;
+      })
+      // ->addColumn('gcc_update', function ($med) {
+
+      //   $dropdown = '<select class="form-control changeGCCUpdate" id="' . $med->patient_id . '" masterbill_id="' . $med->master_bill_id . '">
+      //   <option value="0" ' . ($med->is_gcc_update == 0 ? "selected" : "") . '>Not Updated</option>
+      //   <option value="1" ' . ($med->is_gcc_update == 1 ? "selected" : "") . '>Updated</option>
+      // </select>';
+      //   return $dropdown;
+      // })
+      ->addColumn('action', function ($med) {
+        
+        
+        $download_btn = '';
+        if (File::exists(public_path('img/patient/' . $med->patient_id . '.jpeg'))) {
+
+          $download_btn = '<a href="/img/patient/' . $med->patient_id . '.jpeg" download="' . $med->passport_number . '"><button type="button" class="btn btn-default" ><i class="fa fa-download"></i>&nbsp&nbsp Image</button> </a>';
+        }
+        $print_btn = '';
+        $edit_access= DB::select('select count(p.name) as user_check from permission_role pr
+        inner join role_user ru on ru.role_id =pr.role_id 
+        inner join permissions p on p.id=pr.permission_id 
+        where p.name = "medical-registration-edit" and ru.user_id ='.Auth::user()->id);
+        if($edit_access[0]->user_check==1) {
+          $print_btn = '<button type="button" id="' . $med->patient_id . '" masterbill_id="' . $med->master_bill_id . '" class="editU btn btn-default "><i class="fa fa-edit"></i>&nbsp&nbsp Edit</button>';
+        }
+        $buttons =  $print_btn.'<button type="button" id="' . $med->patient_id . '" masterbill_id="' . $med->master_bill_id . '" class="printW btn btn-default" ><i class="fa fa-print"></i>&nbsp&nbsp Medical</button> ' .
+        '<button type="button" id="' . $med->patient_id . '" masterbill_id="' . $med->master_bill_id . '" class="printV btn btn-default" ><i class="fa fa-print"></i>&nbsp&nbsp Blank</button> '.
+        $download_btn;
+
+        return $buttons;
+      })
+      ->make(true);
+  }
+
+2. Vue
+
+<table
+    aria-describedby="example1_info"
+    role="grid"
+    id="patient-table"
+    class="table table-bordered table-striped table-hover dataTable"
+    >
+    <thead>
+        <tr role="row">
+        <th>SN</th>
+        <th>P.ID</th>
+        <th>Patient Name</th>
+        <th>Passport Number</th>
+        <th>Bill Number</th>
+        <!-- <th>GHC Update</th> -->
+        <th>Status</th>
+        <th>Action</th>
+        </tr>
+    </thead>
+</table>
+
+getdatatable() {
+      let that = this;
+      var fromdate = "";
+      var todate = "";
+      if (this.interval.dateformat == 0) {
+        fromdate = BS2AD(that.interval.fromdate);
+        todate = BS2AD(that.interval.todate);
+      } else {
+        fromdate = that.interval.fromdate;
+        todate = that.interval.todate;
+      }
+
+      $("#patient-table").DataTable().destroy();
+      let table = $("#patient-table").DataTable({
+        processing: true,
+        serverSide: false,
+        ordering: false,
+        bAutoWidth: false,
+        ajax: {
+          url: "/api/medicalregistrations",
+          data: {
+            from: fromdate,
+            to: todate,
+            status: that.status_id,
+            patient_like: that.patient_like,
+          },
+        },
+
+        columns: [
+          { data: "index", width: "3%", name: "SN" },
+          { data: "patient_id", width: "10%", name: "P. ID" },
+          { data: "fullname", width: "12%", name: "Patient Name" },
+          { data: "passport_number", width: "10%", name: "Passport Number" },
+          { data: "bill_no", width: "10%", name: "Bill No." },
+          { data: "status", width: "10%", name: "Status" },
+          { data: "action", width: "35%", name: "action" },
+        ],
+      });
+      table.on("draw.dt", function () {
+        $(".editU")
+          .off()
+          .on("click", function () {
+            that.$router.go(
+              "/medicalregistration/create/" +
+                $(this).attr("id") +
+                "/" +
+                $(this).attr("masterbill_id")
+            );
+          });
+        // $(".changeGCCUpdate")
+        //   .off()
+        //   .on("change", function () {
+        //     let self = this;
+        //     $.ajax({
+        //       url: "/api/storeMedicalPatient",
+        //       dataType: "json",
+        //       type: "POST",
+        //       data: {
+        //         key: "is_gcc_update",
+        //         value: self.value,
+        //         patient_id: parseInt($(self).attr("id")),
+        //         master_bill_id: parseInt($(self).attr("masterbill_id")),
+        //       },
+        //       success: function (res) {
+        //         if (res.status == 200) {
+        //           toastr.success("Verify Status Successfully Updated");
+        //         }
+        //       },
+        //       error: function (xhr, ajaxOptions, thrownError) {
+        //         toastr.error("Something went Wrong. Please try again !");
+        //       },
+        //     });
+        //   });
+           $(".changeStatus")
+          .off()
+          .on("change", function () {
+            $.ajax({
+              url: "/api/storeMedicalPatient",
+              dataType: "json",
+              type: "POST",
+              data: {
+                key: "is_verify",
+                value: this.value,
+                patient_id: parseInt($(this).attr("id")),
+                master_bill_id: parseInt($(this).attr("masterbill_id")),
+              },
+              success: function (res) {
+                if (res.status == 200) {
+                  toastr.success("GCC Status Successfully Updated");
+                }
+              },
+              error: function (xhr, ajaxOptions, thrownError) {
+                toastr.error("Something went Wrong. Please try again !");
+              },
+            });
+          });
+            $(".printV")
+          .off()
+          .on("click", function () {
+            that.print_index += 1;
+            that.patientId = parseInt($(this).attr("id"));
+
+            that.getMedicalPatientDetails(
+              parseInt($(this).attr("id")),
+              parseInt($(this).attr("masterbill_id"))
+            );
+            that.fetchFormFields(
+              parseInt($(this).attr("id")),
+              parseInt($(this).attr("masterbill_id"))
+            );
+
+            setTimeout(function () {
+              $("#PrintMedicals").printThis({
+                importCSS: false,
+              });
+            }, 500);
+          });
+        $(".printW")
+          .off()
+          .on("click", function () {
+            that.print_index += 1;
+            that.patientId = parseInt($(this).attr("id"));
+
+            that.getMedicalPatientDetails(
+              parseInt($(this).attr("id")),
+              parseInt($(this).attr("masterbill_id"))
+            );
+            that.fetchFormFields(
+              parseInt($(this).attr("id")),
+              parseInt($(this).attr("masterbill_id"))
+            );
+
+            setTimeout(function () {
+              $("#PrintMedical").printThis({
+                importCSS: false,
+              });
+            }, 500);
+          });
+      });
+      table.clear();
+      table.draw();
+    },
+
+
+3. Colspan and Add Background
+  "createdRow": function( row, data, dataIndex){
+              if(data.is_leave==1)
+              {
+                 // If name is "Ashton Cox"
+            
+                // Add COLSPAN attribute
+                $('td:eq(0)', row).attr('colspan', 6);
+                
+                // Center horizontally
+                $('td:eq(0)', row).attr('align', 'center');
+
+                // Hide required number of columns
+                // next to the cell with COLSPAN attribute
+                $('td:eq(1)', row).css('display', 'none');
+                $('td:eq(2)', row).css('display', 'none');
+                $('td:eq(3)', row).css('display', 'none');
+                $('td:eq(4)', row).css('display', 'none');
+                $('td:eq(5)', row).css('display', 'none');
+
+                $(row).css("background-color", 'rgb(149 149 149)');
+                $(row).css("color", '#fff');
+                this.api().cell($('td:eq(0)', row)).data(data.day+" - "+data.remarks);
+                
+              }
+
+          },

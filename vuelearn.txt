@@ -1,0 +1,28 @@
+1.  $index in v-for
+    track-by tells Vue which aspect of each item is unique, so it can know when to re-use DOM elements.
+    If your array is a series of objects with an id attribute, you can use track-by='id' . 
+    But if the objects don't have a unique field, track-by='$index' associates each object with its position in the array.
+2.  Dev Tool Vue
+    https://chrome.google.com/webstore/detail/vuejs-devtools/iaajmlceplecbljialhhkmedjlpdblhp
+
+3. Routing 
+    a. template 
+        v-link="{ name: 'holiday-form', query: { dateFlag: true }}"
+        dateFlag:this.$route.query.dateFlag?true:false,
+    b. method
+        this.$router.go("/holiday-schedule");
+
+
+4. On change of selected_item_name.team_item the teamItemDetail does not get change
+    that.teamItemDetail.team_item = that._.clone(that.selected_item_name.team_item);
+
+5.<router-link
+                :to="{ name: 'voucherContra' }"
+                class="nav-link"
+                exact
+              >
+exact => 
+<router-link to="/a"> will get this class applied as long as the current path starts with /a/ or is /a.
+One consequence of this is that <router-link to="/"> will be active for every route! To force the link into "exact match mode"
+
+6. 

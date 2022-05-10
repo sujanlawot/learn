@@ -1,0 +1,19 @@
+<input id="dateformat" type="checkbox">
+
+$("#dateformat").bootstrapSwitch({
+              onText:'BS',
+              offText:'AD'
+            });
+
+check the state of switch
+if($('#dateformat').bootstrapSwitch('state'))
+    {
+    self.computeAge();  
+    }
+    else
+    {
+    self.computeAgeBS();  
+    }
+
+disable input type
+$('#dateformat').bootstrapSwitch('disabled',false);

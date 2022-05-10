@@ -1,0 +1,4 @@
+
+1. loadingGif: trans.client.loding_gif,
+2. <div class="loader"><img :src="loadingGif" /></div>
+3. $(".loader").css({ opacity: "0", visibility: "hidden" });

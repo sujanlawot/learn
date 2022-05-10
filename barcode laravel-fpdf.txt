@@ -1,0 +1,609 @@
+1. composer require codedge/laravel-fpdf
+2.Setup PdfTubeLabel
+<?php
+
+namespace App;
+
+define('FPDF_FONTPATH', public_path() . '/fonts');
+
+use Codedge\Fpdf\Fpdf\Fpdf;
+
+class PdfTubeLabel extends Fpdf
+{
+    public $marginTop;
+    public $marginLeft;
+    public $marginBottom;
+    public $marginRight;
+    protected $pdf;
+    public $sectionWidth;
+    public $height;
+    public $border;
+
+    public $B = 0;
+    public $I = 0;
+    public $U = 0;
+    public $HREF = '';
+    public $ALIGN = '';
+
+    public $tubeLabels;
+
+    public $T128; // Tableau des codes 128
+    public $ABCset = ""; // jeu des caractères éligibles au C128
+    public $Aset = ""; // Set A du jeu des caractères éligibles
+    public $Bset = ""; // Set B du jeu des caractères éligibles
+    public $Cset = ""; // Set C du jeu des caractères éligibles
+    public $SetFrom; // Convertisseur source des jeux vers le tableau
+    public $SetTo; // Convertisseur destination des jeux vers le tableau
+    public $JStart = array("A" => 103, "B" => 104, "C" => 105); // Caractères de sélection de jeu au début du C128
+    public $JSwap = array("A" => 101, "B" => 100, "C" => 99); // Caractères de changement de jeu
+
+    public function Code128($x, $y, $code, $w, $h)
+    {
+        $Aguid = ""; // Création des guides de choix ABC
+        $Bguid = "";
+        $Cguid = "";
+        for ($i = 0; $i < strlen($code); $i++) {
+            $needle = substr($code, $i, 1);
+            $Aguid .= ((strpos($this->Aset, $needle) === false) ? "N" : "O");
+            $Bguid .= ((strpos($this->Bset, $needle) === false) ? "N" : "O");
+            $Cguid .= ((strpos($this->Cset, $needle) === false) ? "N" : "O");
+        }
+
+        $SminiC = "OOOO";
+        $IminiC = 4;
+
+        $crypt = "";
+        while ($code > "") {
+            // BOUCLE PRINCIPALE DE CODAGE
+            $i = strpos($Cguid, $SminiC); // forçage du jeu C, si possible
+            if ($i !== false) {
+                $Aguid[$i] = "N";
+                $Bguid[$i] = "N";
+            }
+
+            if (substr($Cguid, 0, $IminiC) == $SminiC) { // jeu C
+                $crypt .= chr(($crypt > "") ? $this->JSwap["C"] : $this->JStart["C"]); // début Cstart, sinon Cswap
+                $made = strpos($Cguid, "N"); // étendu du set C
+                if ($made === false) {
+                    $made = strlen($Cguid);
+                }
+                if (fmod($made, 2) == 1) {
+                    $made--; // seulement un nombre pair
+                }
+                for ($i = 0; $i < $made; $i += 2) {
+                    $crypt .= chr(strval(substr($code, $i, 2))); // conversion 2 par 2
+                }
+                $jeu = "C";
+            } else {
+                $madeA = strpos($Aguid, "N"); // extended from set A
+                if ($madeA === false) {
+                    $madeA = strlen($Aguid);
+                }
+                $madeB = strpos($Bguid, "N"); // extended from set B
+                if ($madeB === false) {
+                    $madeB = strlen($Bguid);
+                }
+                $made = (($madeA < $madeB) ? $madeB : $madeA); // extended processed
+                $jeu = (($madeA < $madeB) ? "B" : "A"); // Current game
+
+                $crypt .= chr(($crypt > "") ? $this->JSwap[$jeu] : $this->JStart[$jeu]); // start start, else swap
+
+                $crypt .= strtr(substr($code, 0, $made), $this->SetFrom[$jeu], $this->SetTo[$jeu]); // conversion selon jeu
+
+            }
+            $code = substr($code, $made); // shorten area legend and guides process
+            $Aguid = substr($Aguid, $made);
+            $Bguid = substr($Bguid, $made);
+            $Cguid = substr($Cguid, $made);
+        } // MAIN LOOP END
+
+        $check = ord($crypt[0]); // checksum calculation
+        for ($i = 0; $i < strlen($crypt); $i++) {
+            $check += (ord($crypt[$i]) * $i);
+        }
+        $check %= 103;
+
+        $crypt .= chr($check) . chr(106) . chr(107); // Complete encrypted chain
+
+        $i = (strlen($crypt) * 11) - 8; // module width calculation
+        $modul = $w / $i;
+        // dd($w, $i);
+        $this->SetFillColor(0, 0, 0);
+        for ($i = 0; $i < strlen($crypt); $i++) { // PRINT LOOP
+            $c = $this->T128[ord($crypt[$i])];
+            for ($j = 0; $j < count($c); $j++) {
+                $this->Rect($x, $y, $c[$j] * $modul, $h, "F");
+                $x += ($c[$j++] + $c[$j]) * $modul;
+            }
+        }
+        $this->SetFillColor(255, 255, 255);
+    }
+
+    public function header()
+    {
+        // Assign Fonts
+        // $this->AddFont('helvetica', '', 'dogica.php');
+        // $this->AddFont('helvetica', 'B', 'dogica.php');
+        // $this->AddFont('helvetica', 'I', 'dogica.php');
+        // $this->AddFont('helvetica', 'BI', 'dogica.php');
+        $this->AddFont('helvetica', '', 'Helvetica.php');
+        $this->AddFont('helvetica', 'B', 'Helvetica-Bold.php');
+        $this->AddFont('helvetica', 'I', 'Helvetica-Oblique.php');
+        $this->AddFont('helvetica', 'BI', 'Helvetica-BoldOblique.php');
+        $this->fontStyle('');
+    }
+
+    public function section()
+    {
+
+        $barcodeWidth = 35;
+        $barcodeHeight = 20;
+
+        $this->SetFillColor(0, 0, 0);
+
+        // Calculation Center Position for barcode
+        $this->sectionWidth = $this->GetPageWidth();
+        $barcodeX = (($this->sectionWidth - $this->marginLeft - $this->marginRight - $barcodeWidth) / 2) + $this->marginLeft;
+        /*****/
+        // dd($this->tubeLabels);
+        foreach ($this->tubeLabels as $labels) {
+            $labelArr= (array)$labels;
+            foreach ($labelArr as $key => $label) {
+                // name
+                $this->WriteHTML($label->name, 'cell');
+                // Age Gender
+                $xval = $this->GetStringWidth(strip_tags($label->ageGender)) + $this->marginLeft + $this->marginRight + 2;
+                $this->SetX(-$xval);
+                $this->WriteHTML($label->ageGender, 'cell');
+
+                // Patient ID
+                $this->Ln($this->height);
+                $this->WriteHTML($label->pid, 'cell');
+
+                //Running No
+                $xval = $this->GetStringWidth(strip_tags($label->rno)) + $this->marginLeft + $this->marginRight + 3;
+                $this->SetX(-$xval);
+                $this->WriteHTML($label->rno, 'cell');
+
+                // Barcode
+                $this->Ln(0.5);
+                $this->Ln($this->height);
+                $this->Code128($barcodeX, $this->GetY(), $label->barcode, $barcodeWidth, $barcodeHeight);
+                //Collected Datetime
+                $this->SetY($this->GetY() + 10.3);
+                $this->Rect(1, $this->GetY() - 0.5, $this->sectionWidth, $this->height + 0.5, 'F');
+                $this->WriteHTML($label->collDate, 'cell');
+                //Sample Code
+                $xval = $this->GetStringWidth(strip_tags($label->sampleCode)) + $this->marginLeft + $this->marginRight + 2;
+                $this->SetX(-$xval);
+                $this->WriteHTML($label->sampleCode, 'cell');
+                //Passport No
+                if ($this->showPPNo) {
+                    $this->Ln($this->height);
+                    $this->Rect(1, $this->GetY(), $this->sectionWidth, $this->height, 'F');
+                    $this->WriteHTML($label->ppNo, 'cell');
+                }
+                //SpecimenTest
+                $this->SetFontSize($this->defaultFontSize - 3);
+                $this->Ln($this->height - 0.5);
+                $this->Rect(1, $this->GetY(), $this->sectionWidth, $this->height, 'F');
+                $this->WriteHTML($label->specimenTest, 'cell');
+                $this->SetFontSize($this->defaultFontSize);
+
+                // add page until last array element
+                if ($key != (count($labelArr) - 1)) {
+                    $this->AddPage('L', [50, 25]);
+                }
+            }
+        }
+    }
+
+    public function fontStyle($s, $fontSize = null)
+    {
+        if ($fontSize == null) {
+            $fontSize = $this->defaultFontSize;
+        }
+        $this->SetFont('helvetica', $s, $fontSize);
+    }
+
+    public function WriteHTML($html, $type)
+    {
+        //HTML parser
+        $html = str_replace("\n", ' ', $html);
+        $a = preg_split('/<(.*)>/U', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+        foreach ($a as $i => $e) {
+            if ($i % 2 == 0) {
+                //Text
+                // $this->Text($Xval, $Yval, $e);
+                if ($e != "") {
+                    if ($type == 'write') {
+                        $this->Write($this->height, $e);
+                    } else if ($type == 'cell') {
+                        $this->Cell($this->GetStringWidth($e), $this->height, $e, $this->border, 0, 'L');
+                    }
+                }
+
+            } else {
+                //Tag
+                if ($e[0] == '/') {
+                    $this->CloseTag(strtoupper(substr($e, 1)));
+                } else {
+                    //Extract properties
+                    $a2 = explode(' ', $e);
+                    $tag = strtoupper(array_shift($a2));
+                    $prop = array();
+                    foreach ($a2 as $v) {
+                        if (preg_match('/([^=]*)=["\']?([^"\']*)/', $v, $a3)) {
+                            $prop[strtoupper($a3[1])] = $a3[2];
+                        }
+
+                    }
+                    $this->OpenTag($tag, $prop);
+                }
+            }
+        }
+    }
+
+    public function OpenTag($tag, $prop)
+    {
+        //Opening tag
+        if ($tag == 'B' || $tag == 'I' || $tag == 'U') {
+            $this->SetStyle($tag, true);
+        }
+
+        if ($tag == 'A') {
+            $this->HREF = $prop['HREF'];
+        }
+
+        if ($tag == 'BR') {
+            $this->Ln(5);
+        }
+
+        if ($tag == 'P') {
+            $this->ALIGN = $prop['ALIGN'];
+        }
+
+        if ($tag == 'HR') {
+            if (!empty($prop['WIDTH'])) {
+                $Width = $prop['WIDTH'];
+            } else {
+                $Width = $this->w - $this->lMargin - $this->rMargin;
+            }
+
+            $this->Ln(2);
+            $x = $this->GetX();
+            $y = $this->GetY();
+            $this->SetLineWidth(0.4);
+            $this->Line($x, $y, $x + $Width, $y);
+            $this->SetLineWidth(0.2);
+            $this->Ln(2);
+        }
+    }
+
+    public function CloseTag($tag)
+    {
+        //Closing tag
+        if ($tag == 'B' || $tag == 'I' || $tag == 'U') {
+            $this->SetStyle($tag, false);
+        }
+
+        if ($tag == 'A') {
+            $this->HREF = '';
+        }
+
+        if ($tag == 'P') {
+            $this->ALIGN = '';
+        }
+
+    }
+
+    public function SetStyle($tag, $enable)
+    {
+        //Modify style and select corresponding font
+        $this->$tag += ($enable ? 1 : -1);
+        $style = '';
+        foreach (array('B', 'I', 'U') as $s) {
+            if ($this->$s > 0) {
+                $style .= $s;
+            }
+        }
+
+        $this->SetFont('', $style);
+    }
+
+}
+
+2.Routing
+Route::get('/tubelabel/{bulk_id}', 'PdfTubeLabelController@tubeLabelBulk');
+
+3.PdfTubeLabelController@tubeLabelBulk
+    protected $pdf;
+    public function __construct(\App\PdfTubeLabel $pdf)
+    {
+        $this->pdf = $pdf;
+
+        //Html to Pdf
+        //Initialization
+        $this->pdf->B = 0;
+        $this->pdf->I = 0;
+        $this->pdf->U = 0;
+        $this->pdf->HREF = '';
+
+        $this->pdf->tableborder = 0;
+        $this->pdf->tdbegin = false;
+        $this->pdf->tdwidth = 0;
+        $this->pdf->tdheight = 0;
+        $this->pdf->tdalign = "L";
+        $this->pdf->tdbgcolor = false;
+
+        $this->pdf->oldx = 0;
+        $this->pdf->oldy = 0;
+
+        $this->pdf->fontlist = array("arial", "times", "courier", "helvetica", "symbol");
+        $this->pdf->issetfont = false;
+        $this->pdf->issetcolor = false;
+        //
+
+        $this->pdf->T128[] = array(2, 1, 2, 2, 2, 2); //0 : [ ]               // composition des caractères
+        $this->pdf->T128[] = array(2, 2, 2, 1, 2, 2); //1 : [!]
+        $this->pdf->T128[] = array(2, 2, 2, 2, 2, 1); //2 : ["]
+        $this->pdf->T128[] = array(1, 2, 1, 2, 2, 3); //3 : [#]
+        $this->pdf->T128[] = array(1, 2, 1, 3, 2, 2); //4 : [$]
+        $this->pdf->T128[] = array(1, 3, 1, 2, 2, 2); //5 : [%]
+        $this->pdf->T128[] = array(1, 2, 2, 2, 1, 3); //6 : [&]
+        $this->pdf->T128[] = array(1, 2, 2, 3, 1, 2); //7 : [']
+        $this->pdf->T128[] = array(1, 3, 2, 2, 1, 2); //8 : [(]
+        $this->pdf->T128[] = array(2, 2, 1, 2, 1, 3); //9 : [)]
+        $this->pdf->T128[] = array(2, 2, 1, 3, 1, 2); //10 : [*]
+        $this->pdf->T128[] = array(2, 3, 1, 2, 1, 2); //11 : [+]
+        $this->pdf->T128[] = array(1, 1, 2, 2, 3, 2); //12 : [,]
+        $this->pdf->T128[] = array(1, 2, 2, 1, 3, 2); //13 : [-]
+        $this->pdf->T128[] = array(1, 2, 2, 2, 3, 1); //14 : [.]
+        $this->pdf->T128[] = array(1, 1, 3, 2, 2, 2); //15 : [/]
+        $this->pdf->T128[] = array(1, 2, 3, 1, 2, 2); //16 : [0]
+        $this->pdf->T128[] = array(1, 2, 3, 2, 2, 1); //17 : [1]
+        $this->pdf->T128[] = array(2, 2, 3, 2, 1, 1); //18 : [2]
+        $this->pdf->T128[] = array(2, 2, 1, 1, 3, 2); //19 : [3]
+        $this->pdf->T128[] = array(2, 2, 1, 2, 3, 1); //20 : [4]
+        $this->pdf->T128[] = array(2, 1, 3, 2, 1, 2); //21 : [5]
+        $this->pdf->T128[] = array(2, 2, 3, 1, 1, 2); //22 : [6]
+        $this->pdf->T128[] = array(3, 1, 2, 1, 3, 1); //23 : [7]
+        $this->pdf->T128[] = array(3, 1, 1, 2, 2, 2); //24 : [8]
+        $this->pdf->T128[] = array(3, 2, 1, 1, 2, 2); //25 : [9]
+        $this->pdf->T128[] = array(3, 2, 1, 2, 2, 1); //26 : [:]
+        $this->pdf->T128[] = array(3, 1, 2, 2, 1, 2); //27 : [;]
+        $this->pdf->T128[] = array(3, 2, 2, 1, 1, 2); //28 : [<]
+        $this->pdf->T128[] = array(3, 2, 2, 2, 1, 1); //29 : [=]
+        $this->pdf->T128[] = array(2, 1, 2, 1, 2, 3); //30 : [>]
+        $this->pdf->T128[] = array(2, 1, 2, 3, 2, 1); //31 : [?]
+        $this->pdf->T128[] = array(2, 3, 2, 1, 2, 1); //32 : [@]
+        $this->pdf->T128[] = array(1, 1, 1, 3, 2, 3); //33 : [A]
+        $this->pdf->T128[] = array(1, 3, 1, 1, 2, 3); //34 : [B]
+        $this->pdf->T128[] = array(1, 3, 1, 3, 2, 1); //35 : [C]
+        $this->pdf->T128[] = array(1, 1, 2, 3, 1, 3); //36 : [D]
+        $this->pdf->T128[] = array(1, 3, 2, 1, 1, 3); //37 : [E]
+        $this->pdf->T128[] = array(1, 3, 2, 3, 1, 1); //38 : [F]
+        $this->pdf->T128[] = array(2, 1, 1, 3, 1, 3); //39 : [G]
+        $this->pdf->T128[] = array(2, 3, 1, 1, 1, 3); //40 : [H]
+        $this->pdf->T128[] = array(2, 3, 1, 3, 1, 1); //41 : [I]
+        $this->pdf->T128[] = array(1, 1, 2, 1, 3, 3); //42 : [J]
+        $this->pdf->T128[] = array(1, 1, 2, 3, 3, 1); //43 : [K]
+        $this->pdf->T128[] = array(1, 3, 2, 1, 3, 1); //44 : [L]
+        $this->pdf->T128[] = array(1, 1, 3, 1, 2, 3); //45 : [M]
+        $this->pdf->T128[] = array(1, 1, 3, 3, 2, 1); //46 : [N]
+        $this->pdf->T128[] = array(1, 3, 3, 1, 2, 1); //47 : [O]
+        $this->pdf->T128[] = array(3, 1, 3, 1, 2, 1); //48 : [P]
+        $this->pdf->T128[] = array(2, 1, 1, 3, 3, 1); //49 : [Q]
+        $this->pdf->T128[] = array(2, 3, 1, 1, 3, 1); //50 : [R]
+        $this->pdf->T128[] = array(2, 1, 3, 1, 1, 3); //51 : [S]
+        $this->pdf->T128[] = array(2, 1, 3, 3, 1, 1); //52 : [T]
+        $this->pdf->T128[] = array(2, 1, 3, 1, 3, 1); //53 : [U]
+        $this->pdf->T128[] = array(3, 1, 1, 1, 2, 3); //54 : [V]
+        $this->pdf->T128[] = array(3, 1, 1, 3, 2, 1); //55 : [W]
+        $this->pdf->T128[] = array(3, 3, 1, 1, 2, 1); //56 : [X]
+        $this->pdf->T128[] = array(3, 1, 2, 1, 1, 3); //57 : [Y]
+        $this->pdf->T128[] = array(3, 1, 2, 3, 1, 1); //58 : [Z]
+        $this->pdf->T128[] = array(3, 3, 2, 1, 1, 1); //59 : [[]
+        $this->pdf->T128[] = array(3, 1, 4, 1, 1, 1); //60 : [\]
+        $this->pdf->T128[] = array(2, 2, 1, 4, 1, 1); //61 : []]
+        $this->pdf->T128[] = array(4, 3, 1, 1, 1, 1); //62 : [^]
+        $this->pdf->T128[] = array(1, 1, 1, 2, 2, 4); //63 : [_]
+        $this->pdf->T128[] = array(1, 1, 1, 4, 2, 2); //64 : [`]
+        $this->pdf->T128[] = array(1, 2, 1, 1, 2, 4); //65 : [a]
+        $this->pdf->T128[] = array(1, 2, 1, 4, 2, 1); //66 : [b]
+        $this->pdf->T128[] = array(1, 4, 1, 1, 2, 2); //67 : [c]
+        $this->pdf->T128[] = array(1, 4, 1, 2, 2, 1); //68 : [d]
+        $this->pdf->T128[] = array(1, 1, 2, 2, 1, 4); //69 : [e]
+        $this->pdf->T128[] = array(1, 1, 2, 4, 1, 2); //70 : [f]
+        $this->pdf->T128[] = array(1, 2, 2, 1, 1, 4); //71 : [g]
+        $this->pdf->T128[] = array(1, 2, 2, 4, 1, 1); //72 : [h]
+        $this->pdf->T128[] = array(1, 4, 2, 1, 1, 2); //73 : [i]
+        $this->pdf->T128[] = array(1, 4, 2, 2, 1, 1); //74 : [j]
+        $this->pdf->T128[] = array(2, 4, 1, 2, 1, 1); //75 : [k]
+        $this->pdf->T128[] = array(2, 2, 1, 1, 1, 4); //76 : [l]
+        $this->pdf->T128[] = array(4, 1, 3, 1, 1, 1); //77 : [m]
+        $this->pdf->T128[] = array(2, 4, 1, 1, 1, 2); //78 : [n]
+        $this->pdf->T128[] = array(1, 3, 4, 1, 1, 1); //79 : [o]
+        $this->pdf->T128[] = array(1, 1, 1, 2, 4, 2); //80 : [p]
+        $this->pdf->T128[] = array(1, 2, 1, 1, 4, 2); //81 : [q]
+        $this->pdf->T128[] = array(1, 2, 1, 2, 4, 1); //82 : [r]
+        $this->pdf->T128[] = array(1, 1, 4, 2, 1, 2); //83 : [s]
+        $this->pdf->T128[] = array(1, 2, 4, 1, 1, 2); //84 : [t]
+        $this->pdf->T128[] = array(1, 2, 4, 2, 1, 1); //85 : [u]
+        $this->pdf->T128[] = array(4, 1, 1, 2, 1, 2); //86 : [v]
+        $this->pdf->T128[] = array(4, 2, 1, 1, 1, 2); //87 : [w]
+        $this->pdf->T128[] = array(4, 2, 1, 2, 1, 1); //88 : [x]
+        $this->pdf->T128[] = array(2, 1, 2, 1, 4, 1); //89 : [y]
+        $this->pdf->T128[] = array(2, 1, 4, 1, 2, 1); //90 : [z]
+        $this->pdf->T128[] = array(4, 1, 2, 1, 2, 1); //91 : [{]
+        $this->pdf->T128[] = array(1, 1, 1, 1, 4, 3); //92 : [|]
+        $this->pdf->T128[] = array(1, 1, 1, 3, 4, 1); //93 : [}]
+        $this->pdf->T128[] = array(1, 3, 1, 1, 4, 1); //94 : [~]
+        $this->pdf->T128[] = array(1, 1, 4, 1, 1, 3); //95 : [DEL]
+        $this->pdf->T128[] = array(1, 1, 4, 3, 1, 1); //96 : [FNC3]
+        $this->pdf->T128[] = array(4, 1, 1, 1, 1, 3); //97 : [FNC2]
+        $this->pdf->T128[] = array(4, 1, 1, 3, 1, 1); //98 : [SHIFT]
+        $this->pdf->T128[] = array(1, 1, 3, 1, 4, 1); //99 : [Cswap]
+        $this->pdf->T128[] = array(1, 1, 4, 1, 3, 1); //100 : [Bswap]
+        $this->pdf->T128[] = array(3, 1, 1, 1, 4, 1); //101 : [Aswap]
+        $this->pdf->T128[] = array(4, 1, 1, 1, 3, 1); //102 : [FNC1]
+        $this->pdf->T128[] = array(2, 1, 1, 4, 1, 2); //103 : [Astart]
+        $this->pdf->T128[] = array(2, 1, 1, 2, 1, 4); //104 : [Bstart]
+        $this->pdf->T128[] = array(2, 1, 1, 2, 3, 2); //105 : [Cstart]
+        $this->pdf->T128[] = array(2, 3, 3, 1, 1, 1); //106 : [STOP]
+        $this->pdf->T128[] = array(2, 1); //107 : [END BAR]
+
+        for ($i = 32; $i <= 95; $i++) { // jeux de caractères
+            $this->pdf->ABCset .= chr($i);
+        }
+        $this->pdf->Aset = $this->pdf->ABCset;
+        $this->pdf->Bset = $this->pdf->ABCset;
+
+        for ($i = 0; $i <= 31; $i++) {
+            $this->pdf->ABCset .= chr($i);
+            $this->pdf->Aset .= chr($i);
+        }
+        for ($i = 96; $i <= 127; $i++) {
+            $this->pdf->ABCset .= chr($i);
+            $this->pdf->Bset .= chr($i);
+        }
+        for ($i = 200; $i <= 210; $i++) { // controle 128
+            $this->pdf->ABCset .= chr($i);
+            $this->pdf->Aset .= chr($i);
+            $this->pdf->Bset .= chr($i);
+        }
+        $this->pdf->Cset = "0123456789" . chr(206);
+
+        for ($i = 0; $i < 96; $i++) { // convertisseurs des jeux A & B
+            @$this->pdf->SetFrom["A"] .= chr($i);
+            @$this->pdf->SetFrom["B"] .= chr($i + 32);
+            @$this->pdf->SetTo["A"] .= chr(($i < 32) ? $i + 64 : $i - 32);
+            @$this->pdf->SetTo["B"] .= chr($i);
+        }
+        for ($i = 96; $i < 107; $i++) { // contrôle des jeux A & B
+            @$this->pdf->SetFrom["A"] .= chr($i + 104);
+            @$this->pdf->SetFrom["B"] .= chr($i + 104);
+            @$this->pdf->SetTo["A"] .= chr($i);
+            @$this->pdf->SetTo["B"] .= chr($i);
+        }
+    }
+    public function tubeLabelBulk(Request $request)
+    {
+        // dd(request()->bulk_id);
+        $data = Helper::sampleBarcodePrintPDFBulk(request()->bulk_id);
+        
+        $this->pdf->tubeLabels = $data;
+
+        $this->pdf->defaultFontSize = 7;
+        // report margin
+        $this->pdf->marginTop = 1;
+        $this->pdf->marginLeft = 1;
+        $this->pdf->marginRight = 1;
+        $this->pdf->marginBottom = 1;
+        $this->pdf->height = 2.6;
+        $this->pdf->border = 0;
+
+        $this->pdf->showPPNo = 0;
+
+        if (!$this->pdf->showPPNo) {
+            $this->pdf->height = 3;
+        }
+
+        $this->pdf->AliasNbPages();
+        $this->pdf->SetMargins($this->pdf->marginLeft, $this->pdf->marginTop, $this->pdf->marginRight);
+        // Margin Bottom
+        $this->pdf->SetAutoPageBreak(false, $this->pdf->marginBottom);
+
+        //Document Meta
+        $this->pdf->SetCreator('Dolphin by Mavorion Systems');
+        $this->pdf->SetAuthor(trans('client')['name']);
+        $this->pdf->SetTitle('Tube Label');
+        $this->pdf->SetSubject('Laboratory Report');
+        /*********/
+        $this->pdf->AddPage('L', [50, 25]);
+        $this->pdf->section();
+        $this->pdf->Output();
+        // End
+
+    }
+4. Helper function
+public static function sampleBarcodePrintPDFBulk($batchId)
+{
+    $items = [];
+    $patient_name = '';
+    $collected_at = '';
+    $pat_age = '';
+    $samples = DB::select("select code from sample_collection where batch_id= $batchId");
+    // dd($samples);
+    // $samples = explode(',',$samples);
+    foreach ($samples as $key => $value) {
+        $sample_id = $value->code;
+        $data = DB::table('sample_collection as sc')
+        ->select([DB::raw("group_concat(test_name)tests"),'specimen_name','is_corona_test',DB::raw("UPPER(concat(IFNULL(p.fname,''),' ',IFNULL(p.mname,''),' ',IFNULL(p.lname,''))) as 'name', LEFT(p.gender, 1) as gender"), 'sc.collected_at', 'sc.code', 'p.dob', 'p.created_at','p.age','d.code as department_code','sc.running_no','sc.form_no','p.id as patient_id'])
+        ->leftJoin('patients as p', 'p.id', '=', 'sc.patient_id')
+        ->leftJoin('departments as d', 'd.id', '=', 'sc.department_id')
+        ->leftJoin('tests as t', 't.id', '=', 'sc.test_id')
+        ->leftJoin('test_specimen_pivot as tsp', 'sc.test_id', '=', 'tsp.test_id')
+        ->leftJoin('specimens as s', 'tsp.specimen_id', '=', 's.id')
+        ->where('sc.status','>',0)
+        ->where('sc.code', $sample_id)->first();
+
+        
+        
+        if ($data != null) {
+            $patient_name = $data->name;
+            $collected_at = $data->collected_at;
+            $pat_age = $data->patient_id . ' - ' . $data->age . '/' . $data->gender;
+            $temp_sample = [];
+            $temp_sample = [
+                'name' => $data->name,
+                'ageGender'=>$data->age . '/' . $data->gender,
+                'pid'=>$data->patient_id,
+                'rno'=>'R:'.$data->running_no.' F:'.$data->form_no,
+                'collDate'=> $data->collected_at,
+                'sampleCode' => $data->code,
+                'ppNo'=>'',
+                'specimenTest'=>$data->department_code.'-<b>' . $data->specimen_name . '</b>: ' . $data->tests,
+                'barcode'=> $data->code,
+            ];
+            array_push($items, (object)$temp_sample);
+            if($data->is_corona_test && isset(trans('client')['corona_print_times']) && (trans('client')['corona_print_times'] > 1)){
+                for ($i = 1; $i < trans('client')['corona_print_times']; $i++) {
+                    array_push($items, (object)$temp_sample);
+                  }
+            }
+        }
+    }
+    return [(object)$items];
+
+}
+
+5. Vue Section
+that.batchId = $(this).data('id');
+$('#barcodemodalnew').modal('show');
+
+<div class="modal fade" id="barcodemodalnew" role="dialog">
+            <div class="modal-dialog modal-md">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        <h4 class="modal-title">Barcodes</h4>
+                    </div>
+                    <div class="modal-body" id="printBody">
+                        <iframe width="550" height="200" :src="'/tubelabel/'+batchId+'#toolbar=0'" id='samplebarcodepdfnew' frameborder="0"></iframe>      
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" id="btnPrintBarcode" class="btn btn-default" @click="printBarCodeNew">Print</button>
+                        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>	
+
+printBarCodeNew()
+{
+    $("#barcodemodalnew").modal('hide');
+    let objFra = document.getElementById('samplebarcodepdfnew');
+    objFra.contentWindow.focus();
+    objFra.contentWindow.print();
+},

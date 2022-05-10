@@ -1,0 +1,29 @@
+swal2({
+          title: "Are you sure?",
+          text: " Send SMS To Selected Patients",
+          icon: "warning",
+          focusConfirm: true,
+          closeOnEsc: false,
+          buttons: {
+            cancel: "Cancel",
+            continue: "Ok",
+        },
+        })
+        .then((value) => {
+          switch (value) {
+            case "continue":
+              axios.post("/api/saveSmsPatient",{
+                  'patients' : that.patients
+              }).then(response=>{
+                if(response.data.status==200)
+                {
+                  toastr.success(response.data.msg);
+                }
+                else
+                {
+                  toastr.error(response.data.msg)
+                }
+              })
+              break;
+          }
+        });
